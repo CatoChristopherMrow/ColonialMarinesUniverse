@@ -943,8 +943,8 @@ public abstract partial class SharedRMCFlammableSystem : EntitySystem
                 stepping.ArmorMultiplier *= mod.DebuffModifier;
         }
 
+        // CMU14 FireProtection Begin: share ignition and protection checks between walking and standing damage.
         var canIgnite = CanBeIgnited(uid, fireEntity, ignite.Intensity);
-        // Ignition-resistant wearers get the same fire protection while walking as while standing.
         var fireProtection = 1f;
         if (!canIgnite)
         {
@@ -956,6 +956,7 @@ public abstract partial class SharedRMCFlammableSystem : EntitySystem
 
             fireProtection = ev.Multiplier;
         }
+        // CMU14 End
 
         var coords = _transform.GetMoverCoordinates(uid);
         if (stepping.LastPosition is { } last &&
@@ -967,12 +968,16 @@ public abstract partial class SharedRMCFlammableSystem : EntitySystem
                 stepping.Distance = 0;
                 if (CanFireBypassImmunity(fireEntity, uid))
                     // CMU14: fire growth and synthetic resistance.
-                    DamageFromFire(uid, tile * ignite.Intensity * fireProtection, penetrating: ignite.FirePenetrating);
+                    DamageFromFire(uid, tile * ignite.Intensity * fireProtection, penetrating: ignite.FirePenetrating); // CMU14: apply fire protection when ignition is resisted.
             }
         }
 
         if (!_flammableQuery.TryComp(ent.Owner, out var flammable))
             return;
+
+        // CMU14: ignition check moved above walking damage.
+        // Check for ignition immunity before igniting
+        // var canIgnite = CanBeIgnited(uid, fireEntity, ignite.Intensity);
 
         if (canIgnite)
         {
@@ -994,10 +999,18 @@ public abstract partial class SharedRMCFlammableSystem : EntitySystem
         {
             // Damaging entities that are immune to being ignited but NOT immune to the fire's damage
             // Same update rate as FlammableSystem
+            // CMU14 FireProtection Begin: protection calculation moved above walking damage.
+            // var ev = new GetFireProtectionEvent();
+            // RaiseLocalEvent(uid, ref ev);
+            //
+            // if (_inventoryQuery.TryComp(uid, out var inv))
+            //     _inventory.RelayEvent((uid, inv), ref ev);
+            // CMU14 End
+
             if (ent.Comp.UpdateAt <= timing)
             {
                 // CMU14: fire growth and synthetic resistance.
-                DamageFromFire(uid, ignite.Intensity / 5f * flammable.Damage * fireProtection, interruptsDoAfters: false, penetrating: ignite.FirePenetrating);
+                DamageFromFire(uid, ignite.Intensity / 5f * flammable.Damage * fireProtection, interruptsDoAfters: false, penetrating: ignite.FirePenetrating); // CMU14: reuse protection calculated above walking damage.
                 ent.Comp.UpdateAt = timing + ent.Comp.UpdateTime;
             }
         }
